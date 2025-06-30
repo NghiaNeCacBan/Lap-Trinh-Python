@@ -1,183 +1,199 @@
-import math
+import pygame
 import random
 
-import pygame
-from pygame import mixer
-
-# Intialize the pygame
 pygame.init()
 
-# create the screen
-screen = pygame.display.set_mode((800, 600))
+# Màn hình
+WIDTH, HEIGHT = 800, 600
+win = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Space Invaders")
 
-# Background
-background = pygame.image.load('background.png')
+# FPS
+clock = pygame.time.Clock()
+FPS = 60
 
-# Sound
-mixer.music.load("background.wav")
-mixer.music.play(-1)
+# Màu
+RED = (255, 0, 0)
 
-# Caption and Icon
-pygame.display.set_caption("Space Invader")
-icon = pygame.image.load('ufo.png')
-pygame.display.set_icon(icon)
+# Kích thước
+SHIP_WIDTH, SHIP_HEIGHT = 64, 64
+ENEMY_SIZE = 64
+BOSS_SIZE = 128
+BULLET_WIDTH, BULLET_HEIGHT = 8, 20
 
-# Player
-playerImg = pygame.image.load('player.png')
-playerX = 370
-playerY = 480
-playerX_change = 0
+# Load ảnh
+spaceship_img = pygame.transform.scale(pygame.image.load("assets/images/spaceship.png"), (SHIP_WIDTH, SHIP_HEIGHT))
+enemy_img = pygame.transform.scale(pygame.image.load("assets/images/enemy.png"), (ENEMY_SIZE, ENEMY_SIZE))
+boss_img = pygame.transform.scale(pygame.image.load("assets/images/boss.png"), (BOSS_SIZE, BOSS_SIZE))
+bullet_img = pygame.transform.scale(pygame.image.load("assets/images/bullet.png"), (BULLET_WIDTH, BULLET_HEIGHT))
 
-# Enemy
-enemyImg = []
-enemyX = []
-enemyY = []
-enemyX_change = []
-enemyY_change = []
-num_of_enemies = 6
+# Class
+class Spaceship:
+    def __init__(self):
+        self.x = WIDTH // 2 - SHIP_WIDTH // 2
+        self.y = HEIGHT - SHIP_HEIGHT - 10
+        self.speed = 6
 
-for i in range(num_of_enemies):
-    enemyImg.append(pygame.image.load('enemy.png'))
-    enemyX.append(random.randint(0, 736))
-    enemyY.append(random.randint(50, 150))
-    enemyX_change.append(4)
-    enemyY_change.append(40)
+    def draw(self):
+        win.blit(spaceship_img, (self.x, self.y))
 
-# Bullet
+    def move(self, keys):
+        if keys[pygame.K_LEFT] and self.x > 0:
+            self.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.x < WIDTH - SHIP_WIDTH:
+            self.x += self.speed
 
-# Ready - You can't see the bullet on the screen
-# Fire - The bullet is currently moving
+class Enemy:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.speed_x = 1.5
 
-bulletImg = pygame.image.load('bullet.png')
-bulletX = 0
-bulletY = 480
-bulletX_change = 0
-bulletY_change = 10
-bullet_state = "ready"
+    def draw(self):
+        win.blit(enemy_img, (self.x, self.y))
 
-# Score
+class Boss:
+    def __init__(self):
+        self.x = WIDTH // 2 - BOSS_SIZE // 2
+        self.y = 50
+        self.health = 5
+        self.speed_x = 2
 
-score_value = 0
-font = pygame.font.Font('freesansbold.ttf', 32)
+    def draw(self):
+        win.blit(boss_img, (self.x, self.y))
+        pygame.draw.rect(win, RED, (self.x, self.y - 20, BOSS_SIZE, 10))
+        pygame.draw.rect(win, (0, 255, 0), (self.x, self.y - 20, BOSS_SIZE * (self.health / 5), 10))
 
-textX = 10
-testY = 10
+class Bullet:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.speed = 8
 
-# Game Over
-over_font = pygame.font.Font('freesansbold.ttf', 64)
+    def draw(self):
+        win.blit(bullet_img, (self.x, self.y))
 
+    def move(self):
+        self.y -= self.speed
 
-def show_score(x, y):
-    score = font.render("Score : " + str(score_value), True, (255, 255, 255))
-    screen.blit(score, (x, y))
+class EnemyBullet:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.speed = 5
 
+    def draw(self):
+        pygame.draw.rect(win, (255, 50, 50), (self.x, self.y, 6, 15))
 
-def game_over_text():
-    over_text = over_font.render("GAME OVER", True, (255, 255, 255))
-    screen.blit(over_text, (200, 250))
+    def move(self):
+        self.y += self.speed
 
+# Hàm tạo enemy
+def create_enemies(count):
+    enemies = []
+    while len(enemies) < count:
+        new_x = random.randint(0, WIDTH - ENEMY_SIZE)
+        new_y = random.randint(20, 150)
+        overlap = False
+        for e in enemies:
+            if abs(e.x - new_x) < ENEMY_SIZE and abs(e.y - new_y) < ENEMY_SIZE:
+                overlap = True
+                break
+        if not overlap:
+            enemies.append(Enemy(new_x, new_y))
+    return enemies
 
-def player(x, y):
-    screen.blit(playerImg, (x, y))
+# Khởi tạo
+spaceship = Spaceship()
+enemies = create_enemies(10)
+bullets = []
+boss_bullets = []
+boss = None
 
+# Game loop
+run = True
+while run:
+    clock.tick(FPS)
+    win.fill((0, 0, 0))
 
-def enemy(x, y, i):
-    screen.blit(enemyImg[i], (x, y))
-
-
-def fire_bullet(x, y):
-    global bullet_state
-    bullet_state = "fire"
-    screen.blit(bulletImg, (x + 16, y + 10))
-
-
-def isCollision(enemyX, enemyY, bulletX, bulletY):
-    distance = math.sqrt(math.pow(enemyX - bulletX, 2) + (math.pow(enemyY - bulletY, 2)))
-    if distance < 27:
-        return True
-    else:
-        return False
-
-
-# Game Loop
-running = True
-while running:
-
-    # RGB = Red, Green, Blue
-    screen.fill((0, 0, 0))
-    # Background Image
-    screen.blit(background, (0, 0))
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            run = False
 
-        # if keystroke is pressed check whether its right or left
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
-                playerX_change = -5
-            if event.key == pygame.K_RIGHT:
-                playerX_change = 5
-            if event.key == pygame.K_SPACE:
-                if bullet_state is "ready":
-                    bulletSound = mixer.Sound("laser.wav")
-                    bulletSound.play()
-                    # Get the current x cordinate of the spaceship
-                    bulletX = playerX
-                    fire_bullet(bulletX, bulletY)
+    keys = pygame.key.get_pressed()
+    spaceship.move(keys)
 
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
-                playerX_change = 0
+    # Bắn
+    if keys[pygame.K_SPACE]:
+        if len(bullets) < 50:
+            bullets.append(Bullet(spaceship.x + SHIP_WIDTH // 2 - BULLET_WIDTH // 2, spaceship.y))
 
-    # 5 = 5 + -0.1 -> 5 = 5 - 0.1
-    # 5 = 5 + 0.1
+    spaceship.draw()
 
-    playerX += playerX_change
-    if playerX <= 0:
-        playerX = 0
-    elif playerX >= 736:
-        playerX = 736
-
-    # Enemy Movement
-    for i in range(num_of_enemies):
-
-        # Game Over
-        if enemyY[i] > 440:
-            for j in range(num_of_enemies):
-                enemyY[j] = 2000
-            game_over_text()
+    # Enemy logic
+    move_down = False
+    for enemy in enemies:
+        if enemy.x <= 0 or enemy.x >= WIDTH - ENEMY_SIZE:
+            move_down = True
             break
 
-        enemyX[i] += enemyX_change[i]
-        if enemyX[i] <= 0:
-            enemyX_change[i] = 4
-            enemyY[i] += enemyY_change[i]
-        elif enemyX[i] >= 736:
-            enemyX_change[i] = -4
-            enemyY[i] += enemyY_change[i]
+    for enemy in enemies:
+        if move_down:
+            enemy.speed_x *= -1
+            enemy.y += 20
+        enemy.x += enemy.speed_x
+        enemy.draw()
 
-        # Collision
-        collision = isCollision(enemyX[i], enemyY[i], bulletX, bulletY)
-        if collision:
-            explosionSound = mixer.Sound("explosion.wav")
-            explosionSound.play()
-            bulletY = 480
-            bullet_state = "ready"
-            score_value += 1
-            enemyX[i] = random.randint(0, 736)
-            enemyY[i] = random.randint(50, 150)
+    # Khi hết enemy thì sinh boss
+    if len(enemies) == 0 and boss is None:
+        boss = Boss()
 
-        enemy(enemyX[i], enemyY[i], i)
+    # Boss logic
+    if boss:
+        boss.x += boss.speed_x
+        if boss.x <= 0 or boss.x >= WIDTH - BOSS_SIZE:
+            boss.speed_x *= -1
 
-    # Bullet Movement
-    if bulletY <= 0:
-        bulletY = 480
-        bullet_state = "ready"
+        boss.draw()
 
-    if bullet_state is "fire":
-        fire_bullet(bulletX, bulletY)
-        bulletY -= bulletY_change
+        if random.random() < 0.01:
+            boss_bullets.append(EnemyBullet(boss.x + BOSS_SIZE // 2, boss.y + BOSS_SIZE))
 
-    player(playerX, playerY)
-    show_score(textX, testY)
+    # Boss bullet
+    for b_bullet in boss_bullets[:]:
+        b_bullet.move()
+        b_bullet.draw()
+
+        # Va chạm với spaceship
+        if spaceship.x < b_bullet.x < spaceship.x + SHIP_WIDTH and spaceship.y < b_bullet.y < spaceship.y + SHIP_HEIGHT:
+            print("Bạn bị boss bắn trúng!")
+            boss_bullets.remove(b_bullet)
+
+        elif b_bullet.y > HEIGHT:
+            boss_bullets.remove(b_bullet)
+
+    # Bullet người chơi
+    for bullet in bullets[:]:
+        bullet.move()
+        bullet.draw()
+
+        for enemy in enemies[:]:
+            if enemy.x < bullet.x < enemy.x + ENEMY_SIZE and enemy.y < bullet.y < enemy.y + ENEMY_SIZE:
+                enemies.remove(enemy)
+                bullets.remove(bullet)
+                break
+
+        if boss:
+            if boss.x < bullet.x < boss.x + BOSS_SIZE and boss.y < bullet.y < boss.y + BOSS_SIZE:
+                boss.health -= 1
+                bullets.remove(bullet)
+                if boss.health <= 0:
+                    boss = None
+                break
+
+        if bullet.y < 0:
+            bullets.remove(bullet)
+
     pygame.display.update()
+
+pygame.quit()
